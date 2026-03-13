@@ -1,0 +1,158 @@
+@page "/"
+
+<PageTitle>Moogle — Intelligent Search</PageTitle>
+
+<div class="page-wrapper">
+
+  <header class="site-header">
+    <div class="logo-block">
+      <span class="logo-icon">◈</span>
+      <span class="logo-text">moogle</span>
+      <span class="logo-tag">search engine</span>
+    </div>
+  </header>
+
+  <section class="search-section @(hasSearched ? "search-section--compact" : "")">
+    @if (!hasSearched)
+    {
+      <div class="hero-headline">
+        <h1>Search <em>smarter</em>,<br/>not harder.</h1>
+        <p class="hero-sub">TF-IDF &nbsp;·&nbsp; Levenshtein &nbsp;·&nbsp; Trie &nbsp;·&nbsp; Vector Space Model</p>
+      </div>
+    }
+
+    <div class="search-bar-container">
+      <form @onsubmit="RunQuery" @onsubmit:preventDefault="true">
+        <div class="search-bar">
+          <span class="search-icon">⌕</span>
+          <input @bind="query"
+                 @bind:event="oninput"
+                 @onkeydown="HandleKeyDown"
+                 class="search-input"
+                 placeholder="Search… try operators: !exclude  ^require  ~proximity  *boost"
+                 autocomplete="off"
+                 spellcheck="false" />
+          @if (!string.IsNullOrEmpty(query))
+          {
+            <button type="button" class="clear-btn" @onclick="ClearQuery">✕</button>
+          }
+          <button type="submit" class="search-btn" disabled="@isLoading">
+            @if (isLoading) { <span class="spinner"></span> }
+            else { <span>Search</span> }
+          </button>
+        </div>
+      </form>
+
+      <div class="operator-pills">
+        <span class="pill-label">Operators:</span>
+        <span class="pill pill--red"   title="Exclude word from results">!exclude</span>
+        <span class="pill pill--green" title="Word MUST appear">^require</span>
+        <span class="pill pill--blue"  title="Prefer nearby words">~proximity</span>
+        <span class="pill pill--gold"  title="Boost word importance">*boost</span>
+      </div>
+    </div>
+  </section>
+
+  @if (hasSearched)
+  {
+    <section class="results-section">
+      <div class="results-meta">
+        @if (isLoading) { <span class="meta-text">Searching…</span> }
+        else
+        {
+          <span class="meta-text">
+            <strong>@result.Count</strong> result@(result.Count != 1 ? "s" : "")
+            for <em>"@lastQuery"</em>
+          </span>
+        }
+      </div>
+
+      @if (!string.IsNullOrEmpty(result.Suggestion))
+      {
+        <div class="suggestion-banner">
+          <span class="suggestion-icon">◎</span>
+          Did you mean&nbsp;
+          <button class="suggestion-link" @onclick='() => ApplySuggestion(result.Suggestion)'>
+            @result.Suggestion
+          </button>
+          &nbsp;?
+        </div>
+      }
+
+      @if (!isLoading && result.Count == 0)
+      {
+        <div class="no-results">
+          <p class="no-results-icon">⊘</p>
+          <p>No documents matched your query.</p>
+          <p class="no-results-hint">Try broader terms or check your spelling.</p>
+        </div>
+      }
+
+      <ul class="result-list">
+        @{ int rank = 0; }
+        @foreach (var item in result.Items())
+        {
+          rank++;
+          <li class="result-card" style="@($"--rank: {rank}; --delay: {rank * 0.06:F2}s")">
+            <div class="card-inner">
+              <div class="card-header">
+                <span class="card-rank">#@rank</span>
+                <h2 class="card-title">@item.Title</h2>
+                <div class="score-bar-wrap" title='Relevance: @item.Score.ToString("P0")'>
+                  <div class="score-bar" style="@($"width: {Math.Min(item.Score,1f) * 100:F1}%")"></div>
+                  <span class="score-label">@item.Score.ToString("P0")</span>
+                </div>
+              </div>
+              <p class="card-snippet">… @item.Snippet …</p>
+            </div>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+
+  <footer class="site-footer">
+    <p>Built with <strong>.NET 6 · Blazor · C#</strong> &nbsp;|&nbsp;
+       TF-IDF Vector Space · Levenshtein Correction · Trie Index · Inverted Index</p>
+  </footer>
+
+</div>
+
+@code {
+  private string query     = "";
+  private string lastQuery = "";
+  private SearchResult result = new SearchResult();
+  private bool hasSearched = false;
+  private bool isLoading   = false;
+
+  private async Task RunQuery()
+  {
+    if (string.IsNullOrWhiteSpace(query)) return;
+    lastQuery   = query;
+    isLoading   = true;
+    hasSearched = true;
+    StateHasChanged();
+    await Task.Delay(1);
+    result    = Moogle.Query(query);
+    isLoading = false;
+  }
+
+  private void HandleKeyDown(KeyboardEventArgs e)
+  {
+    if (e.Key == "Enter") _ = RunQuery();
+  }
+
+  private void ClearQuery()
+  {
+    query       = "";
+    result      = new SearchResult();
+    hasSearched = false;
+    lastQuery   = "";
+  }
+
+  private void ApplySuggestion(string suggestion)
+  {
+    query = suggestion;
+    _ = RunQuery();
+  }
+}
