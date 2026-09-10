@@ -4,12 +4,64 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Moogle</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <main>
-        <h1>Moogle</h1>
-        <p>Motor de búsqueda de documentos</p>
-    </main>
+    <div id="app">
+        <section id="hero" class="hero" style="display: none;">
+            <h1 class="hero-title">Moogle</h1>
+            <p class="hero-subtitle">Motor de búsqueda de documentos</p>
+        </section>
+
+        <div class="search-container">
+            <div class="search-bar">
+                <input
+                    type="text"
+                    id="search-input"
+                    placeholder="Buscar documentos..."
+                    autocomplete="off"
+                >
+                <button id="search-btn" class="search-btn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="operators">
+                <span class="pill" title="Excluir término">! término</span>
+                <span class="pill" title="Requerir término">^ término</span>
+                <span class="pill" title="Proximidad">~ término</span>
+                <span class="pill" title="Boost de relevancia">* término</span>
+            </div>
+        </div>
+
+        <div id="results-section" style="display: none;">
+            <div id="results-info"></div>
+            <div id="results-list"></div>
+            <div id="suggestion-banner" style="display: none;">
+                <span>¿Quisiste decir: </span>
+                <button id="suggestion-btn" class="suggestion-link"></button>
+                <span>?</span>
+            </div>
+        </div>
+
+        <div id="no-results" style="display: none;">
+            <p>No se encontraron resultados.</p>
+        </div>
+
+        <div id="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Buscando...</p>
+        </div>
+
+        <footer>
+            <p>Moogle - Motor de búsqueda de documentos</p>
+        </footer>
+    </div>
+
+    <script src="/static/js/app.js"></script>
 </body>
 </html>
