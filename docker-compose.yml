@@ -1,0 +1,13 @@
+services:
+  moogle:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./Content:/app/Content:ro
+    environment:
+      - MOOGLE_CONTENT_PATH=/app/Content
+      - MOOGLE_MAX_RESULTS=10
+      - MOOGLE_SNIPPET_LENGTH=320
+      - MOOGLE_DEBUG=false
+    restart: unless-stopped

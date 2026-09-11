@@ -4,12 +4,12 @@
 ◈ moogle
 ```
 
-**An intelligent full-text search engine built with C# and Blazor.**  
+**An intelligent full-text search engine built with Python and FastAPI.**  
 *TF-IDF · Levenshtein Distance · Trie · Inverted Index · Vector Space Model*
 
-[![.NET](https://img.shields.io/badge/.NET-6.0-512BD4?style=flat-square)](https://dotnet.microsoft.com/)
-[![C#](https://img.shields.io/badge/C%23-10.0-239120?style=flat-square)](https://docs.microsoft.com/en-us/dotnet/csharp/)
-[![Blazor](https://img.shields.io/badge/Blazor-Server-512BD4?style=flat-square)](https://blazor.net/)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
 
 [English](#english) · [Español](#español)
@@ -24,41 +24,53 @@
 
 Moogle is a document search engine that ranks results using the **Vector Space Model** with **TF-IDF** weighting, implements **spell correction** via the Levenshtein edit-distance algorithm, and uses a **Trie** plus an **Inverted Index** for sub-linear lookup performance.
 
-It was built as a portfolio project at the Faculty of Mathematics and Computer Science, University of Havana. The codebase is intentionally clean, heavily documented, and designed to demonstrate real algorithms and data structures.
+It was originally built as a portfolio project at the Faculty of Mathematics and Computer Science, University of Havana. This version is a full migration from **C# / Blazor Server** to **Python / FastAPI**, following a clean architecture.
 
 ---
 
 ### Architecture
 
+The project follows a clean architecture with clear separation of concerns:
+
 ```
 moogle/
 ├── Content/                   ← .txt files to search (add your own!)
-├── MoogleEngine/              ← Core library (pure C#, no web deps)
-│   ├── Models/
-│   │   ├── Document.cs        ← Processed document with TF map + positions
-│   │   └── ProcessedQuery.cs  ← Parsed query with operator metadata
-│   ├── DataStructures/
-│   │   ├── Trie.cs            ← Prefix tree for O(L) lookup & suggestions
-│   │   └── InvertedIndex.cs   ← term → postings list (doc IDs + positions)
-│   ├── Algorithms/
-│   │   ├── TFIDFCalculator.cs ← TF-IDF, IDF pre-computation, cosine similarity
-│   │   └── LevenshteinDistance.cs ← Edit-distance + query spell correction
-│   ├── DocumentProcessor.cs   ← File reader + tokeniser
-│   ├── QueryParser.cs         ← Operator parser (!, ^, ~, *)
-│   ├── SearchEngine.cs        ← Main orchestrator (index build + query exec)
-│   ├── SnippetExtractor.cs    ← Sliding-window snippet finder
-│   ├── Moogle.cs              ← Public facade (lazy singleton engine)
-│   ├── SearchResult.cs        ← Query result container
-│   └── SearchItem.cs          ← Single result (title, snippet, score)
-└── MoogleServer/              ← Blazor Server web app (UI)
-    ├── Pages/Index.razor      ← Main search page (all UI logic)
-    └── wwwroot/css/site.css   ← Full design system (dark editorial theme)
+├── app/                       ← Application package
+│   ├── main.py                ← FastAPI app entry point (lifespan: index build)
+│   ├── config.py              ← Settings via pydantic-settings (MOOGLE_* env vars)
+│   ├── middleware.py          ← CORS setup
+│   ├── models/                ← Domain models (dataclasses)
+│   │   ├── document.py        ← Processed document with TF map + positions
+│   │   ├── query.py           ← Parsed query with operator metadata
+│   │   ├── result.py          ← SearchItem + SearchResult containers
+│   │   └── posting.py         ← Frozen index entry (doc ID + positions)
+│   ├── schemas/               ← Pydantic schemas (API validation)
+│   │   └── search.py          ← SearchRequest / SearchResponse
+│   ├── repositories/          ← Data access layer
+│   │   └── document_repository.py ← Reads + tokenizes .txt files
+│   ├── data_structures/       ← Core data structures
+│   │   ├── trie.py            ← Prefix tree for O(L) lookup & suggestions
+│   │   └── inverted_index.py  ← term → postings list (doc IDs + positions)
+│   ├── services/              ← Business logic (use cases)
+│   │   ├── search_engine.py   ← Main orchestrator (index build + query exec)
+│   │   ├── query_parser.py    ← Operator parser (!, ^, ~, *)
+│   │   ├── tfidf.py           ← TF-IDF, IDF pre-computation, cosine similarity
+│   │   ├── snippet_extractor.py ← Sliding-window snippet finder
+│   │   └── levenshtein.py     ← Edit-distance + query spell correction
+│   ├── routers/               ← HTTP layer
+│   │   └── search.py          ← POST /api/search, GET /api/health
+│   └── static/                ← Frontend (HTML, CSS, JS)
+├── tests/                     ← pytest unit + integration tests
+├── Dockerfile                 ← Production image (non-root user)
+├── docker-compose.yml         ← Content volume + env configuration
+├── requirements.txt           ← Runtime dependencies
+└── pyproject.toml             ← Project metadata, ruff, pytest config
 ```
 
 **Data flow:**
 
 ```
-Startup → DocumentProcessor reads .txt files
+Startup → DocumentRepository reads .txt files
         → InvertedIndex + Trie built from vocabulary
         → IDF values pre-computed for all terms
         → Document magnitude vectors pre-computed
@@ -70,6 +82,17 @@ Query   → QueryParser detects operators (!, ^, ~, *)
         → Results sorted by score → Snippets extracted
         → If sparse: LevenshteinDistance suggests correction
 ```
+
+---
+
+### API
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | Serves the web UI |
+| `/api/search` | POST | `{"query": "..."}` → ranked results with snippets |
+| `/api/health` | GET | Health check |
+| `/docs` | GET | Interactive OpenAPI documentation (Swagger UI) |
 
 ---
 
@@ -105,25 +128,19 @@ Both query and documents are modelled as TF-IDF vectors. The angle between them 
 cos(q, d) = (q · d) / (|q| × |d|)
 ```
 
-**Why?** Documents with rare, specific terms score higher for rare queries. Common stop-words (appearing in most documents) get a near-zero IDF automatically — no hand-coded stop-word list needed.
-
 Document magnitudes `|d|` are pre-computed at index time, so the cosine division at query time is O(1) per document.
 
 #### 4. Levenshtein Edit Distance
 
 Levenshtein distance is the minimum number of single-character edits (insert, delete, substitute) to transform one string into another. We use the standard 2-row DP approach for O(m×n) time and O(min(m,n)) space.
 
-```
-"algoritmo" → "algorithm" = 2 edits (substitute o→h, substitute o→m... wait, insert)
-```
-
 **Why?** When a query returns few results (< 3), we check each query term against the entire Trie vocabulary. The closest word (by edit distance, tie-broken by document frequency) is suggested as a correction.
 
 #### 5. Sliding-Window Snippet Extractor
 
-Instead of returning the first occurrence of a query term, the snippet extractor finds the dense *cluster* of query terms in the document using a two-pointer sliding window.
+Instead of returning the first occurrence of a query term, the snippet extractor finds the dense *cluster* of query terms in the document using a sliding window.
 
-**Why?** The snippet shown in the result card should be the most informative passage — the region where the most query words co-occur — just like Google's result cards.
+**Why?** The snippet shown in the result card should be the most informative passage — the region where the most query words co-occur.
 
 ---
 
@@ -134,7 +151,7 @@ Instead of returning the first occurrence of a query term, the snippet extractor
 | `!word`  | `algorithms !sorting` | Excludes any document containing *sorting* |
 | `^word`  | `^recursion algorithms` | Only documents containing *recursion* |
 | `~word`  | `binary ~search tree` | Boosts documents where *search* is close to other terms |
-| `*word`  | `**sorting algorithms` | Multiplies *sorting*'s weight by 3 (one × per `*`) |
+| `*word`  | `**sorting algorithms` | Multiplies *sorting*'s weight (one × per `*`) |
 
 Operators can be combined: `^recursion *algorithms !sorting`
 
@@ -144,72 +161,70 @@ Operators can be combined: `^recursion *algorithms !sorting`
 
 | Tool | Version | Notes |
 |------|---------|-------|
-| [.NET SDK](https://dotnet.microsoft.com/download) | **6.0 or later** | `dotnet --version` to check |
-| Any terminal | — | Linux, macOS, WSL2 on Windows |
-| make (optional) | — | Only needed for `make dev` shortcut |
-
-No database, no Docker, no Node.js required.
+| Python | **3.11+** | `python --version` to check |
+| Docker | 20+ (optional) | Recommended for containerized deployment |
 
 ---
 
 ### Installation & Running
 
-```bash
-# 1. Clone (or unzip) the project
-git clone https://github.com/youruser/moogle.git
-cd moogle
+#### With Docker (recommended)
 
-# 2. Add your .txt documents to the Content folder
+```bash
+# 1. Add your .txt documents to the Content folder
 cp your_documents/*.txt Content/
 
-# 3. Run the application
-make dev
-# or directly:
-dotnet watch run --project MoogleServer
+# 2. Build and run
+docker compose up --build
 ```
 
-Open your browser at **http://localhost:5000** (or whichever port is shown in the terminal).
+Open your browser at **http://localhost:8000**.
 
-The index is built automatically on first query. Subsequent queries are instant.
+#### Without Docker
+
+```bash
+# 1. Create and activate a virtual environment
+python -m venv .venv
+source .venv/bin/activate
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Add your documents and run
+cp your_documents/*.txt Content/
+uvicorn app.main:app --reload
+```
+
+Open your browser at **http://localhost:8000**.
 
 ---
 
 ### Adding Your Own Documents
 
-Simply drop `.txt` files into the `Content/` folder and restart the application. Moogle will index them automatically. The more documents you add, the better TF-IDF discrimination becomes.
+Simply drop `.txt` files into the `Content/` folder and restart the application. Moogle will index them automatically at startup. The more documents you add, the better TF-IDF discrimination becomes.
 
 ---
 
-### Project Structure Deep-Dive
+### Configuration
 
-| File | Responsibility |
-|------|---------------|
-| `DocumentProcessor.cs` | Reads .txt files, tokenises text (lower-case, alphanumeric only), computes TF maps and character-level word positions |
-| `QueryParser.cs` | Strips operator characters from each token, classifies each word as plain / required / excluded / proximity / boosted |
-| `SearchEngine.cs` | Orchestrates index build and query execution; applies all operator filters; delegates scoring, snippets, and suggestions to specialised classes |
-| `TFIDFCalculator.cs` | Computes IDF table (once), document magnitude vectors (once), query vectors (per query), and cosine similarity (per candidate document) |
-| `LevenshteinDistance.cs` | Two-row DP edit distance; `FindBestSuggestion` scans vocabulary; `SuggestQuery` corrects all plain query terms |
-| `Trie.cs` | Prefix-tree insert/lookup/enumerate; stores document frequency per word for IDF-guided suggestion ranking |
-| `InvertedIndex.cs` | Maps term → `List<Posting>` (docId + positions); `GetDocumentFrequency` is O(1) for IDF computation |
-| `SnippetExtractor.cs` | Sliding two-pointer window over sorted hit positions; centres snippet on densest term cluster |
-| `Moogle.cs` | Thread-safe lazy singleton; resolves Content directory path; catches all engine exceptions before they reach the UI |
+All settings are read from environment variables prefixed with `MOOGLE_` (see `.env.example`):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MOOGLE_CONTENT_PATH` | `./Content` | Directory containing `.txt` documents |
+| `MOOGLE_MAX_RESULTS` | `10` | Maximum results per search |
+| `MOOGLE_SNIPPET_LENGTH` | `320` | Snippet length in characters |
+| `MOOGLE_DEBUG` | `false` | Enable debug logging |
 
 ---
 
-### Running Tests (manual)
-
-Since .NET is the only dependency, you can add an `xUnit` test project:
+### Running Tests
 
 ```bash
-dotnet new xunit -n MoogleTests
-dotnet add MoogleTests/MoogleTests.csproj reference MoogleEngine/MoogleEngine.csproj
-dotnet test
+pip install -r requirements.txt
+pip install pytest==8.3.4 httpx==0.28.1
+pytest tests/
 ```
-
-Example unit test ideas:
-- `LevenshteinDistance.Compute("kitten", "sitting") == 3`
-- `Trie.Contains("algorithm") == true` after insert
-- `TFIDFCalculator.ComputeScore(0.1f, 5f) == 0.5f`
 
 ---
 
@@ -226,39 +241,53 @@ MIT — see [LICENSE](LICENSE).
 
 Moogle es un motor de búsqueda de documentos que clasifica los resultados usando el **Modelo de Espacio Vectorial** con pesos **TF-IDF**, implementa **corrección ortográfica** mediante el algoritmo de distancia de edición de Levenshtein, y utiliza un **Trie** más un **Índice Invertido** para búsquedas en tiempo sub-lineal.
 
+Esta versión es una migración completa desde **C# / Blazor Server** a **Python / FastAPI**, siguiendo una arquitectura limpia.
+
 ---
 
 ### Arquitectura
 
+El proyecto sigue una arquitectura limpia con separación clara de responsabilidades:
+
 ```
 moogle/
 ├── Content/                     ← Archivos .txt a buscar (¡añade los tuyos!)
-├── MoogleEngine/                ← Biblioteca principal (C# puro, sin dependencias web)
-│   ├── Models/
-│   │   ├── Document.cs          ← Documento procesado con mapa TF + posiciones
-│   │   └── ProcessedQuery.cs    ← Query parseada con metadatos de operadores
-│   ├── DataStructures/
-│   │   ├── Trie.cs              ← Árbol de prefijos para búsqueda O(L)
-│   │   └── InvertedIndex.cs     ← término → lista de postings
-│   ├── Algorithms/
-│   │   ├── TFIDFCalculator.cs   ← TF-IDF, precálculo de IDF, similitud coseno
-│   │   └── LevenshteinDistance.cs ← Distancia de edición + corrección de queries
-│   ├── DocumentProcessor.cs     ← Lector de archivos + tokenizador
-│   ├── QueryParser.cs           ← Parser de operadores (!, ^, ~, *)
-│   ├── SearchEngine.cs          ← Orquestador principal
-│   ├── SnippetExtractor.cs      ← Extractor de fragmentos por ventana deslizante
-│   ├── Moogle.cs                ← Fachada pública (singleton lazy)
-│   ├── SearchResult.cs          ← Contenedor de resultados
-│   └── SearchItem.cs            ← Resultado individual (título, snippet, score)
-└── MoogleServer/                ← Aplicación web Blazor Server
-    ├── Pages/Index.razor        ← Página de búsqueda principal
-    └── wwwroot/css/site.css     ← Sistema de diseño completo (tema oscuro editorial)
+├── app/                         ← Paquete de la aplicación
+│   ├── main.py                  ← Punto de entrada FastAPI (lifespan: construcción del índice)
+│   ├── config.py                ← Configuración con pydantic-settings (variables MOOGLE_*)
+│   ├── middleware.py            ← Setup de CORS
+│   ├── models/                  ← Modelos de dominio (dataclasses)
+│   │   ├── document.py          ← Documento procesado con mapa TF + posiciones
+│   │   ├── query.py             ← Query parseada con metadatos de operadores
+│   │   ├── result.py            ← Contenedores SearchItem + SearchResult
+│   │   └── posting.py           ← Entrada de índice congelada (ID + posiciones)
+│   ├── schemas/                 ← Schemas Pydantic (validación de API)
+│   │   └── search.py            ← SearchRequest / SearchResponse
+│   ├── repositories/            ← Capa de acceso a datos
+│   │   └── document_repository.py ← Lee y tokeniza archivos .txt
+│   ├── data_structures/         ← Estructuras de datos núcleo
+│   │   ├── trie.py              ← Árbol de prefijos para búsqueda O(L)
+│   │   └── inverted_index.py    ← término → lista de postings
+│   ├── services/                ← Lógica de negocio (casos de uso)
+│   │   ├── search_engine.py     ← Orquestador principal (índice + ejecución)
+│   │   ├── query_parser.py      ← Parser de operadores (!, ^, ~, *)
+│   │   ├── tfidf.py             ← TF-IDF, precálculo de IDF, similitud coseno
+│   │   ├── snippet_extractor.py ← Extractor de fragmentos por ventana deslizante
+│   │   └── levenshtein.py       ← Distancia de edición + corrección de queries
+│   ├── routers/                 ← Capa HTTP
+│   │   └── search.py            ← POST /api/search, GET /api/health
+│   └── static/                  ← Frontend (HTML, CSS, JS)
+├── tests/                       ← Tests unitarios y de integración (pytest)
+├── Dockerfile                   ← Imagen de producción (usuario no-root)
+├── docker-compose.yml           ← Volumen de Content + configuración
+├── requirements.txt             ← Dependencias de runtime
+└── pyproject.toml               ← Metadatos, ruff, configuración de pytest
 ```
 
 **Flujo de datos:**
 
 ```
-Arranque → DocumentProcessor lee los .txt
+Arranque → DocumentRepository lee los .txt
          → Se construyen InvertedIndex + Trie
          → Se pre-calculan los valores IDF
          → Se pre-calculan las magnitudes de los vectores de documentos
@@ -273,53 +302,14 @@ Query    → QueryParser detecta operadores (!, ^, ~, *)
 
 ---
 
-### Algoritmos y Estructuras de Datos Explicados
+### API
 
-#### 1. Índice Invertido
-
-El índice invertido mapea cada palabra única a la lista de documentos que la contienen — llamada *lista de postings*. Cada entrada también guarda las posiciones de carácter de la palabra dentro del documento.
-
-**¿Por qué?** Sin índice invertido, una búsqueda requeriría leer cada documento para cada término de la query: O(D × L) por búsqueda. Con el índice, los documentos candidatos se recuperan en O(1) por término.
-
-#### 2. Trie (Árbol de Prefijos)
-
-Un Trie almacena todo el vocabulario con insert y lookup en O(L), donde L es la longitud de la palabra. Cada nodo hoja guarda la palabra y su frecuencia de documento.
-
-**¿Por qué?** Se usa para dos propósitos:
-- Verificaciones rápidas `Contains(palabra)` durante la corrección ortográfica (O(L) frente a O(n) de una lista).
-- Enumerar todas las palabras almacenadas para alimentar el corrector Levenshtein sin un arreglo separado.
-
-#### 3. TF-IDF + Similitud Coseno
-
-TF-IDF es un esquema clásico de ponderación en Recuperación de Información:
-
-```
-TF(t, d)    = count(t en d) / totalTokens(d)        (frecuencia normalizada)
-IDF(t)      = log((N + 1) / (df(t) + 1)) + 1        (bonus de rareza)
-TF-IDF(t,d) = TF(t,d) × IDF(t)
-```
-
-Tanto la query como los documentos se modelan como vectores TF-IDF. El ángulo entre ellos (similitud coseno) mide la relevancia independientemente de la longitud del documento:
-
-```
-cos(q, d) = (q · d) / (|q| × |d|)
-```
-
-**¿Por qué?** Los documentos con términos raros y específicos obtienen mayor puntuación para queries raras. Las palabras vacías comunes (que aparecen en la mayoría de los documentos) obtienen un IDF cercano a cero automáticamente — sin necesidad de listas de stop-words codificadas a mano.
-
-Las magnitudes de documento `|d|` se pre-calculan al indexar, de modo que la división coseno en tiempo de query es O(1) por documento.
-
-#### 4. Distancia de Edición de Levenshtein
-
-La distancia de Levenshtein es el número mínimo de ediciones de un solo carácter (inserción, eliminación, sustitución) para transformar una cadena en otra. Usamos el enfoque estándar de DP de 2 filas para tiempo O(m×n) y espacio O(min(m,n)).
-
-**¿Por qué?** Cuando una query devuelve pocos resultados (< 3), comparamos cada término de la query con todo el vocabulario del Trie. La palabra más cercana (por distancia de edición, con desempate por frecuencia de documento) se sugiere como corrección.
-
-#### 5. Extractor de Snippets por Ventana Deslizante
-
-En lugar de devolver la primera ocurrencia de un término de la query, el extractor de snippets encuentra el *clúster denso* de términos de query en el documento usando una ventana deslizante de dos punteros.
-
-**¿Por qué?** El snippet mostrado en la tarjeta de resultado debe ser el pasaje más informativo — la región donde co-ocurren la mayor cantidad de palabras de la query — tal como hacen los motores de búsqueda comerciales.
+| Endpoint | Método | Descripción |
+|----------|--------|-------------|
+| `/` | GET | Sirve la interfaz web |
+| `/api/search` | POST | `{"query": "..."}` → resultados rankeados con snippets |
+| `/api/health` | GET | Health check |
+| `/docs` | GET | Documentación interactiva OpenAPI (Swagger UI) |
 
 ---
 
@@ -330,7 +320,7 @@ En lugar de devolver la primera ocurrencia de un término de la query, el extrac
 | `!palabra`  | `algoritmos !ordenacion` | Excluye documentos que contengan *ordenacion* |
 | `^palabra`  | `^recursion algoritmos` | Solo documentos que contengan *recursion* |
 | `~palabra`  | `busqueda ~binaria arbol` | Favorece documentos donde *binaria* está cerca de otros términos |
-| `*palabra`  | `**ordenacion algoritmos` | Multiplica el peso de *ordenacion* por 3 (un × por `*`) |
+| `*palabra`  | `**ordenacion algoritmos` | Multiplica el peso de *ordenacion* (un × por `*`) |
 
 Los operadores se pueden combinar: `^recursion *algoritmos !ordenacion`
 
@@ -340,81 +330,73 @@ Los operadores se pueden combinar: `^recursion *algoritmos !ordenacion`
 
 | Herramienta | Versión | Notas |
 |-------------|---------|-------|
-| [SDK de .NET](https://dotnet.microsoft.com/download) | **6.0 o superior** | `dotnet --version` para verificar |
-| Cualquier terminal | — | Linux, macOS, WSL2 en Windows |
-| make (opcional) | — | Solo necesario para el atajo `make dev` |
-
-No se requiere base de datos, Docker ni Node.js.
+| Python | **3.11+** | `python --version` para verificar |
+| Docker | 20+ (opcional) | Recomendado para despliegue contenerizado |
 
 ---
 
 ### Instalación y Ejecución
 
-```bash
-# 1. Clonar (o descomprimir) el proyecto
-git clone https://github.com/tuusuario/moogle.git
-cd moogle
+#### Con Docker (recomendado)
 
-# 2. Añadir tus documentos .txt a la carpeta Content
+```bash
+# 1. Añadir tus documentos .txt a la carpeta Content
 cp tus_documentos/*.txt Content/
 
-# 3. Ejecutar la aplicación
-make dev
-# o directamente:
-dotnet watch run --project MoogleServer
+# 2. Construir y ejecutar
+docker compose up --build
 ```
 
-Abre tu navegador en **http://localhost:5000** (o el puerto que se muestre en la terminal).
+Abre tu navegador en **http://localhost:8000**.
 
-El índice se construye automáticamente en la primera búsqueda. Las búsquedas posteriores son instantáneas.
+#### Sin Docker
+
+```bash
+# 1. Crear y activar el entorno virtual
+python -m venv .venv
+source .venv/bin/activate
+
+# 2. Instalar dependencias
+pip install -r requirements.txt
+
+# 3. Añadir documentos y ejecutar
+cp tus_documentos/*.txt Content/
+uvicorn app.main:app --reload
+```
+
+Abre tu navegador en **http://localhost:8000**.
 
 ---
 
 ### Añadir Tus Propios Documentos
 
-Simplemente coloca archivos `.txt` en la carpeta `Content/` y reinicia la aplicación. Moogle los indexará automáticamente. Cuantos más documentos añadas, mejor será la discriminación TF-IDF.
+Simplemente coloca archivos `.txt` en la carpeta `Content/` y reinicia la aplicación. Moogle los indexará automáticamente al arrancar. Cuantos más documentos añadas, mejor será la discriminación TF-IDF.
 
 ---
 
-### Tabla Resumen de Archivos
+### Configuración
 
-| Archivo | Responsabilidad |
-|---------|----------------|
-| `DocumentProcessor.cs` | Lee archivos .txt, tokeniza el texto (minúsculas, solo alfanumérico), calcula mapas TF y posiciones a nivel de carácter |
-| `QueryParser.cs` | Elimina caracteres de operador de cada token, clasifica cada palabra como simple / requerida / excluida / proximidad / potenciada |
-| `SearchEngine.cs` | Orquesta la construcción del índice y la ejecución de queries; aplica todos los filtros de operadores |
-| `TFIDFCalculator.cs` | Calcula la tabla IDF (una vez), vectores de magnitud de documentos (una vez), vectores de query (por query), similitud coseno (por documento candidato) |
-| `LevenshteinDistance.cs` | DP de 2 filas para distancia de edición; `FindBestSuggestion` escanea el vocabulario; `SuggestQuery` corrige todos los términos simples |
-| `Trie.cs` | Árbol de prefijos insert/lookup/enumerar; almacena frecuencia de documento por palabra |
-| `InvertedIndex.cs` | Mapea término → `List<Posting>` (docId + posiciones) |
-| `SnippetExtractor.cs` | Ventana deslizante de dos punteros sobre posiciones de hits ordenadas |
-| `Moogle.cs` | Singleton lazy thread-safe; resuelve la ruta del directorio Content |
+Toda la configuración se lee de variables de entorno con prefijo `MOOGLE_` (ver `.env.example`):
+
+| Variable | Valor por defecto | Descripción |
+|----------|-------------------|-------------|
+| `MOOGLE_CONTENT_PATH` | `./Content` | Directorio con los documentos `.txt` |
+| `MOOGLE_MAX_RESULTS` | `10` | Máximo de resultados por búsqueda |
+| `MOOGLE_SNIPPET_LENGTH` | `320` | Longitud del snippet en caracteres |
+| `MOOGLE_DEBUG` | `false` | Activa logging de depuración |
 
 ---
 
-### Proceso de Desarrollo: Por Qué Elegí Cada Tecnología
+### Ejecutar Tests
 
-#### ¿Por qué C# y .NET 6?
-El proyecto lo especificaba. C# tiene un sistema de tipos expresivo, soporte nativo para `IEnumerable`, `Dictionary`, y colecciones genéricas que hacen que los algoritmos sean naturales de implementar. .NET 6 es LTS y tiene excelente rendimiento.
-
-#### ¿Por qué Blazor Server?
-Permite escribir UI interactiva en C# sin JavaScript. La comunicación entre el motor de búsqueda (biblioteca de clases) y la interfaz es una llamada directa a método — sin REST API, sin serialización JSON, sin latencia de red adicional.
-
-#### ¿Por qué un Índice Invertido y no un simple bucle?
-Con 1000 documentos de 10,000 palabras cada uno, un bucle doble haría 10 millones de comparaciones por búsqueda. El índice invertido reduce esto a recuperar solo los documentos relevantes — típicamente < 1% del corpus.
-
-#### ¿Por qué TF-IDF y no contar ocurrencias?
-Contar ocurrencias da el mismo peso a "el", "la", "de" y a "recursión", "algoritmo". TF-IDF penaliza automáticamente las palabras que aparecen en todos los documentos — sin listas de stop-words codificadas — y premia los términos específicos y raros.
-
-#### ¿Por qué Trie y no HashSet para el vocabulario?
-Un HashSet tiene O(1) lookup pero no puede enumerar palabras por prefijo ni listar todas las palabras eficientemente para Levenshtein. El Trie da O(L) lookup Y enumeración eficiente del vocabulario completo.
-
-#### ¿Por qué Levenshtein y no solo "¿quisiste decir"?
-La corrección ortográfica basada en distancia de edición es el estándar de la industria. Maneja errores tipográficos, transposiciones y omisiones de una manera matemáticamente principiada sin necesitar un diccionario externo.
+```bash
+pip install -r requirements.txt
+pip install pytest==8.3.4 httpx==0.28.1
+pytest tests/
+```
 
 ---
 
 ### Licencia
 
 MIT — ver [LICENSE](LICENSE).
-
