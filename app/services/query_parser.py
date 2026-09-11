@@ -13,7 +13,7 @@ class QueryParser:
             QueryParser._process_token(token, processed)
 
         processed.all_scored_terms = (
-            processed.plain_terms
+            set(processed.plain_terms)
             | processed.required_terms
             | processed.proximity_terms
             | set(processed.boosted_terms.keys())

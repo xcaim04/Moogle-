@@ -55,7 +55,7 @@ class TFIDFCalculator:
     def build_query_vector(self, query: ProcessedQuery) -> dict[str, float]:
         vector: dict[str, float] = {}
         all_terms = (
-            query.plain_terms
+            set(query.plain_terms)
             | query.required_terms
             | query.proximity_terms
             | set(query.boosted_terms.keys())
