@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
+from app.middleware import setup_middleware
 from app.routers import search
 from app.services.search_engine import SearchEngine
 
@@ -24,6 +25,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+setup_middleware(app)
 app.include_router(search.router)
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
